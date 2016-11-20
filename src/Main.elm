@@ -14,7 +14,7 @@ main =
         { init = initWithFlags
         , view = view
         , update = update
-        , subscriptions = subscriptions
+        , subscriptions = (\_ -> Sub.none)
         }
 
 
@@ -33,7 +33,8 @@ type alias Model =
 
 type Msg
     = TextToSendChange String
-    | SubmitTextToSend
+    | TextToSendPost
+    | TextToSendPostResult (Result Http.Error String)
     | ToggleMute
     | VolumeChange String
     | PostVolume (Result Http.Error String)
@@ -45,8 +46,11 @@ update msg model =
         TextToSendChange newText ->
             ( { model | textToSend = newText }, Cmd.none )
 
-        SubmitTextToSend ->
-            ( { model | textToSend = "" }, Cmd.none )
+        TextToSendPost ->
+            ( { model | textToSend = "" }, postTextToSend model )
+
+        TextToSendPostResult _ ->
+            ( model, Cmd.none )
 
         ToggleMute ->
             let
@@ -75,27 +79,37 @@ update msg model =
             ( model, Cmd.none )
 
 
+postAndForget : String -> Json.Encode.Value -> (Result Http.Error String -> Msg) -> Cmd Msg
+postAndForget url data msg =
+    let
+        req =
+            Http.post url (jsonBody data) (Json.Decode.succeed "")
+    in
+        Http.send msg req
+
+
+postTextToSend : Model -> Cmd Msg
+postTextToSend model =
+    let
+        url =
+            (model.config.httpUrl ++ "/keyboard/send-text")
+
+        data =
+            Json.Encode.object [ ( "text", Json.Encode.string (model.textToSend ++ "\n") ) ]
+    in
+        postAndForget url data TextToSendPostResult
+
+
 postVolume : Model -> Cmd Msg
 postVolume model =
     let
         url =
             (model.config.httpUrl ++ "/system/set-volume")
 
-        volume =
+        data =
             Json.Encode.object [ ( "level", Json.Encode.int model.volume ) ]
-
-        jsonData =
-            jsonBody volume
-
-        req =
-            Http.post url jsonData (Json.Decode.succeed "")
     in
-        Http.send PostVolume req
-
-
-subscriptions : Model -> Sub Msg
-subscriptions model =
-    Sub.none
+        postAndForget url data PostVolume
 
 
 view : Model -> Html Msg
@@ -115,7 +129,7 @@ view model =
                     ]
                 , input [ class "volume-slider", type_ "range", onInput VolumeChange, value <| toString model.volume ] []
                 ]
-            , form [ class "send-text-form", onSubmit SubmitTextToSend ]
+            , form [ class "send-text-form", onSubmit TextToSendPost ]
                 [ input [ class "text-to-send", type_ "text", placeholder "Text to send", onInput TextToSendChange, value model.textToSend ] [] ]
             , div [ class "mousepad-container" ]
                 [ div [ class "mousepad" ]
