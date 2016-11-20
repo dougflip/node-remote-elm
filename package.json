@@ -15,7 +15,9 @@
     "build:elm": "elm make src/Main.elm --output=dist/bundle.js",
     "watch:elm": "onchange -i src/**/*.elm -- npm run build:elm",
     "build:images": "cp -r src/images dist",
-    "watch:images": "onchange -i \"src/images/**/*\" -- npm run build:images"
+    "watch:images": "onchange -i \"src/images/**/*\" -- npm run build:images",
+    "build:js": "cp src/elm-embed.js dist",
+    "watch:js": "onchange -i src/elm-embed.js -- npm run build:js"
   },
   "dependencies": {
     "babel-core": "^6.13.2",

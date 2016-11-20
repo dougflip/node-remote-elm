@@ -1,5 +1,7 @@
-Starter
-=======
+Node Remote Client
+===================
+
+Front end for Node Remote API rewritten in Elm.
 
 ## Setup
 

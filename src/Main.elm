@@ -3,25 +3,32 @@ module Main exposing (..)
 import Html exposing (..)
 import Html.Attributes exposing (class, type_, src, placeholder, value)
 import Html.Events exposing (..)
+import Http exposing (..)
+import Json.Decode
+import Json.Encode
 import ElmEscapeHtml exposing (..)
 
 
 main =
-    program
-        { init = init
+    programWithFlags
+        { init = initWithFlags
         , view = view
         , update = update
         , subscriptions = subscriptions
         }
 
 
-init : ( Model, Cmd Msg )
-init =
-    ( Model "" 50 50, Cmd.none )
+initWithFlags : Config -> ( Model, Cmd a )
+initWithFlags config =
+    ( Model "" 50 50 config, Cmd.none )
+
+
+type alias Config =
+    { httpUrl : String }
 
 
 type alias Model =
-    { textToSend : String, volume : Int, restoreVolume : Int }
+    { textToSend : String, volume : Int, restoreVolume : Int, config : Config }
 
 
 type Msg
@@ -29,6 +36,7 @@ type Msg
     | SubmitTextToSend
     | ToggleMute
     | VolumeChange String
+    | PostVolume (Result Http.Error String)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -47,15 +55,42 @@ update msg model =
                         0
                     else
                         model.restoreVolume
+
+                newModel =
+                    { model | volume = newVolume }
             in
-                ( { model | volume = newVolume }, Cmd.none )
+                ( newModel, postVolume newModel )
 
         VolumeChange val ->
             let
                 newVolume =
                     Result.withDefault model.volume (String.toInt val)
+
+                newModel =
+                    { model | volume = newVolume, restoreVolume = newVolume }
             in
-                ( { model | volume = newVolume, restoreVolume = newVolume }, Cmd.none )
+                ( newModel, postVolume newModel )
+
+        PostVolume _ ->
+            ( model, Cmd.none )
+
+
+postVolume : Model -> Cmd Msg
+postVolume model =
+    let
+        url =
+            (model.config.httpUrl ++ "/system/set-volume")
+
+        volume =
+            Json.Encode.object [ ( "level", Json.Encode.int model.volume ) ]
+
+        jsonData =
+            jsonBody volume
+
+        req =
+            Http.post url jsonData (Json.Decode.succeed "")
+    in
+        Http.send PostVolume req
 
 
 subscriptions : Model -> Sub Msg
