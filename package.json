@@ -1,0 +1,34 @@
+{
+  "name": "starter",
+  "version": "1.0.0",
+  "description": "[TODO]",
+  "main": "",
+  "scripts": {
+    "postinstall": "mkdir -p dist && elm package install",
+    "start": "run-p serve watch:*",
+    "serve": "browser-sync start --port 2112 --ss dist",
+    "build": "run-p build:*",
+    "build:html": "cp src/*.html dist/",
+    "watch:html": "onchange -i \"src/**/*.html\" -- npm run build:html",
+    "build:sass": "node-sass src/main.scss dist/bundle.css",
+    "watch:sass": "onchange -i \"src/**/*.scss\" -- npm run build:sass",
+    "build:elm": "elm make src/Main.elm --output=dist/bundle.js",
+    "watch:elm": "onchange -i src/**/*.elm -- npm run build:elm",
+    "build:images": "cp -r src/images dist",
+    "watch:images": "onchange -i \"src/images/**/*\" -- npm run build:images"
+  },
+  "dependencies": {
+    "babel-core": "^6.13.2",
+    "babel-loader": "^6.2.5",
+    "babel-preset-es2015": "^6.13.2",
+    "node-sass": "^3.8.0",
+    "npm-run-all": "^3.0.0",
+    "webpack": "^1.13.2"
+  },
+  "devDependencies": {
+    "browser-sync": "^2.17.5",
+    "onchange": "^3.0.2"
+  },
+  "author": "dougflip (Doug DiFilippo)",
+  "license": "MIT"
+}
