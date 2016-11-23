@@ -1,4 +1,4 @@
-module Main exposing (..)
+port module Main exposing (..)
 
 import Html exposing (..)
 import Html.Attributes exposing (class, type_, src, placeholder, value)
@@ -14,7 +14,7 @@ main =
         { init = initWithFlags
         , view = view
         , update = update
-        , subscriptions = (\_ -> Sub.none)
+        , subscriptions = subscriptions
         }
 
 
@@ -31,13 +31,22 @@ type alias Model =
     { textToSend : String, volume : Int, restoreVolume : Int, config : Config }
 
 
+type MouseClick
+    = Left
+    | Right
+
+
 type Msg
     = TextToSendChange String
     | TextToSendPost
-    | TextToSendPostResult (Result Http.Error String)
-    | ToggleMute
+    | MuteToggle
     | VolumeChange String
-    | PostVolume (Result Http.Error String)
+    | LeftClickPost String
+    | RightClickPost String
+    | MouseMovePost ( Float, Float )
+    | ScrollUpPost String
+    | ScrollDownPost String
+    | NoContentPostResult (Result Http.Error String)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -49,10 +58,7 @@ update msg model =
         TextToSendPost ->
             ( { model | textToSend = "" }, postTextToSend model )
 
-        TextToSendPostResult _ ->
-            ( model, Cmd.none )
-
-        ToggleMute ->
+        MuteToggle ->
             let
                 newVolume =
                     if model.volume > 0 then
@@ -75,17 +81,33 @@ update msg model =
             in
                 ( newModel, postVolume newModel )
 
-        PostVolume _ ->
+        LeftClickPost _ ->
+            ( model, postMouseClick model Left )
+
+        RightClickPost _ ->
+            ( model, postMouseClick model Right )
+
+        MouseMovePost points ->
+            ( model, postMouseMove model points )
+
+        ScrollUpPost _ ->
+            ( model, postScrollUp model )
+
+        ScrollDownPost _ ->
+            ( model, postScrollDown model )
+
+        NoContentPostResult _ ->
             ( model, Cmd.none )
 
 
-postAndForget : String -> Json.Encode.Value -> (Result Http.Error String -> Msg) -> Cmd Msg
-postAndForget url data msg =
-    let
-        req =
-            Http.post url (jsonBody data) (Json.Decode.succeed "")
-    in
-        Http.send msg req
+postNoContent : String -> Http.Body -> Cmd Msg
+postNoContent url body =
+    Http.post url body (Json.Decode.succeed "")
+        |> Http.send NoContentPostResult
+
+postNoContentWithNoBody : String -> Cmd Msg
+postNoContentWithNoBody url =
+    postNoContent url Http.emptyBody
 
 
 postTextToSend : Model -> Cmd Msg
@@ -97,7 +119,7 @@ postTextToSend model =
         data =
             Json.Encode.object [ ( "text", Json.Encode.string (model.textToSend ++ "\n") ) ]
     in
-        postAndForget url data TextToSendPostResult
+        postNoContent url (jsonBody data)
 
 
 postVolume : Model -> Cmd Msg
@@ -109,7 +131,77 @@ postVolume model =
         data =
             Json.Encode.object [ ( "level", Json.Encode.int model.volume ) ]
     in
-        postAndForget url data PostVolume
+        postNoContent url (jsonBody data)
+
+
+postMouseClick : Model -> MouseClick -> Cmd Msg
+postMouseClick model click =
+    let
+        url =
+            case click of
+                Left ->
+                    model.config.httpUrl ++ "/mouse/left-click"
+
+                Right ->
+                    model.config.httpUrl ++ "/mouse/right-click"
+    in
+        postNoContentWithNoBody url
+
+
+postMouseMove : Model -> ( Float, Float ) -> Cmd Msg
+postMouseMove model ( x, y ) =
+    let
+        url =
+            (model.config.httpUrl ++ "/mouse/move-relative")
+
+        data =
+            Json.Encode.object [ ( "x", Json.Encode.float x ), ( "y", Json.Encode.float y ) ]
+    in
+        postNoContent url (jsonBody data)
+
+
+postScrollUp : Model -> Cmd Msg
+postScrollUp model =
+    let
+        url =
+            (model.config.httpUrl ++ "/mouse/scroll-up")
+    in
+        postNoContentWithNoBody url
+
+
+postScrollDown : Model -> Cmd Msg
+postScrollDown model =
+    let
+        url =
+            (model.config.httpUrl ++ "/mouse/scroll-down")
+    in
+        postNoContentWithNoBody url
+
+
+port leftClick : (String -> msg) -> Sub msg
+
+
+port rightClick : (String -> msg) -> Sub msg
+
+
+port mouseMove : (( Float, Float ) -> msg) -> Sub msg
+
+
+port scrollUp : (String -> msg) -> Sub msg
+
+
+port scrollDown : (String -> msg) -> Sub msg
+
+
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    Sub.batch
+        [ (leftClick LeftClickPost)
+        , (rightClick RightClickPost)
+        , (mouseMove MouseMovePost)
+        , (scrollUp ScrollUpPost)
+        , (scrollDown ScrollDownPost)
+        ]
 
 
 view : Model -> Html Msg
@@ -121,7 +213,7 @@ view model =
             ]
         , div [ class "main-content" ]
             [ div [ class "volume-slider-wrapper" ]
-                [ div [ class "speaker-icons", onClick ToggleMute ]
+                [ div [ class "speaker-icons", onClick MuteToggle ]
                     [ if model.volume <= 0 then
                         img [ class "mute", src "images/mute.svg" ] []
                       else
